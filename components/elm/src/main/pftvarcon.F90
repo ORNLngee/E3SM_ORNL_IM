@@ -108,6 +108,8 @@ module pftvarcon
   real(r8), allocatable :: leafcn(:)      !leaf C:N [gC/gN]
   real(r8), allocatable :: flnr(:)        !fraction of leaf N in Rubisco [no units]
   real(r8), allocatable :: woody(:)       !woody lifeform flag (0 or 1)
+  ! allow woody stem_taper as an input of pft physilogy constants
+  real(r8), allocatable :: stem_taper(:)  ! woody pft stem ratio of height:radius (by default, it's 200 for tree and 10 for shrub)
   real(r8), allocatable :: lflitcn(:)     !leaf litter C:N (gC/gN)
   real(r8), allocatable :: frootcn(:)     !fine root C:N (gC/gN)
   real(r8), allocatable :: livewdcn(:)    !live wood (phloem and ray parenchyma) C:N (gC/gN)
@@ -432,6 +434,7 @@ contains
     allocate( leafcn        (0:mxpft) )
     allocate( flnr          (0:mxpft) )        
     allocate( woody         (0:mxpft) )       
+    allocate( stem_taper    (0:mxpft) )
     allocate( lflitcn       (0:mxpft) )      
     allocate( frootcn       (0:mxpft) )      
     allocate( livewdcn      (0:mxpft) )     
@@ -656,6 +659,15 @@ contains
     if ( .not. readv ) call endrun(msg=' ERROR: error in reading in pft data'//errMsg(__FILE__, __LINE__))
     call ncd_io('woody',woody, 'read', ncid, readvar=readv, posNOTonfile=.true.)
     if ( .not. readv ) call endrun(msg=' ERROR: error in reading in pft data'//errMsg(__FILE__, __LINE__))
+    call ncd_io('taper',stem_taper, 'read', ncid, readvar=readv, posNOTonfile=.true.)
+    if ( .not. readv ) then
+       ! if known 'woody' type from previous reading
+       stem_taper(:) = 200.0_r8
+       do i=  0, npft-1
+          ! the following needs redo for default because of unknown shrub PFT
+          if (woody(i) > 1) stem_taper(i) = 10.0_r8
+       end do
+    end if
     call ncd_io('lflitcn',lflitcn, 'read', ncid, readvar=readv, posNOTonfile=.true.)
     if ( .not. readv ) call endrun(msg=' ERROR: error in reading in pft data'//errMsg(__FILE__, __LINE__))
     call ncd_io('frootcn',frootcn, 'read', ncid, readvar=readv, posNOTonfile=.true.)
@@ -1101,6 +1113,11 @@ contains
        npcropmax            = nsugarcaneirrig      ! last prognostic crop in list
        nppercropmin         = nmiscanthus          ! first prognostic perennial crop
        nppercropmax         = nwillowirrig         ! last prognostic perennial crop in list
+    end if
+
+    if (i==nbrdlf_evr_shrub .or. i==nbrdlf_dcd_tmp_shrub .or. i==nbrdlf_dcd_brl_shrub) then
+       ! assuming no one intends to edit shrub's taper as 200 like as a tree on purpose
+       if (stem_taper(i)==200._r8 .and. woody(i)<=1._r8) stem_taper(i) = 10._r8
     end if
 
     call set_is_pft_known_to_model()

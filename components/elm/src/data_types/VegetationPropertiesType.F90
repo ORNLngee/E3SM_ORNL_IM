@@ -44,6 +44,7 @@ module VegetationPropertiesType
      real(r8), pointer :: leafcn        (:) => null()  ! leaf C:N (gC/gN)
      real(r8), pointer :: flnr          (:) => null()  ! fraction of leaf N in the Rubisco enzyme (gN Rubisco / gN leaf)
      real(r8), pointer :: woody         (:) => null()  ! binary flag for woody lifeform (1=woody, 0=not woody)
+     real(r8), pointer :: stem_taper    (:) => null()  ! woody stem ratio of height:radius
      real(r8), pointer :: lflitcn       (:) => null()  ! leaf litter C:N (gC/gN)
      real(r8), pointer :: frootcn       (:) => null()  ! fine root C:N (gC/gN)
      real(r8), pointer :: livewdcn      (:) => null()  ! live wood (phloem and ray parenchyma) C:N (gC/gN)
@@ -181,6 +182,7 @@ contains
     use pftvarcon , only : fnr, act25, kcha, koha, cpha, vcmaxha, jmaxha, tpuha
     use pftvarcon , only : lmrha, vcmaxhd, jmaxhd, tpuhd, lmrse, qe, theta_cj
     use pftvarcon , only : bbbopt, mbbopt, nstor, br_xr, tc_stress, lmrhd
+    use pftvarcon , only : stem_taper
     !
 
     class (vegetation_properties_type) :: this
@@ -211,6 +213,7 @@ contains
     allocate(this%leafcn        (0:numpft))        ; this%leafcn       (:)   =spval
     allocate(this%flnr          (0:numpft))        ; this%flnr         (:)   =spval
     allocate(this%woody         (0:numpft))        ; this%woody        (:)   =spval
+    allocate(this%stem_taper    (0:numpft))        ; this%stem_taper   (:)   =spval
     allocate(this%lflitcn       (0:numpft))        ; this%lflitcn      (:)   =spval
     allocate(this%frootcn       (0:numpft))        ; this%frootcn      (:)   =spval
     allocate(this%livewdcn      (0:numpft))        ; this%livewdcn     (:)   =spval
@@ -334,6 +337,7 @@ contains
        this%smpsc(m)        = smpsc(m)
        this%fnitr(m)        = fnitr(m)
        this%woody(m)        = woody(m)
+       this%stem_taper(m)   = stem_taper(m)
        this%lflitcn(m)      = lflitcn(m)
        this%frootcn(m)      = frootcn(m)
        this%livewdcn(m)     = livewdcn(m)
