@@ -999,6 +999,11 @@ end subroutine EMAlquimia_Coldstart
     procedure(GetAuxiliaryOutput), pointer   :: engine_getAuxiliaryOutput
     ! real (c_double), pointer :: alquimia_mobile_data(:), alquimia_immobile_data(:), alquimia_rates_data(:)
 
+real(r8),pointer,dimension(:,:) :: tSOC1, tDOC1, tDIC1, tSOC2, tDOC2, tDIC2
+real(r8),pointer,dimension(:,:) :: tSON1, tDON1, tDIN1, tSON2, tDON2, tDIN2
+real(r8),pointer,dimension(:,:) :: tNO3_1,tNH4_1,tN2O_1,tN2_1, tNO3_2,tNH4_2,tN2O_2,tN2_2
+
+
     ! write(iulog,*) 'Alquimia solving step!'
     
     ! Pass data from ELM
@@ -1161,6 +1166,20 @@ end subroutine EMAlquimia_Coldstart
     
      ! Run the reactions engine for a step. Alquimia works on one cell at a time
      ! TODO: Transport needs to be integrated somehow. 
+
+allocate(tSOC1(num_soilc,nlevdecomp));allocate(tSOC2(num_soilc,nlevdecomp))
+allocate(tDOC1(num_soilc,nlevdecomp));allocate(tDOC2(num_soilc,nlevdecomp))
+allocate(tDIC1(num_soilc,nlevdecomp));allocate(tDIC2(num_soilc,nlevdecomp))
+
+allocate(tSON1(num_soilc,nlevdecomp));allocate(tSON2(num_soilc,nlevdecomp))
+allocate(tDON1(num_soilc,nlevdecomp));allocate(tDON2(num_soilc,nlevdecomp))
+allocate(tDIN1(num_soilc,nlevdecomp));allocate(tDIN2(num_soilc,nlevdecomp))
+
+allocate(tNO3_1(num_soilc,nlevdecomp));allocate(tNO3_2(num_soilc,nlevdecomp))
+allocate(tNH4_1(num_soilc,nlevdecomp));allocate(tNH4_2(num_soilc,nlevdecomp))
+allocate(tN2O_1(num_soilc,nlevdecomp));allocate(tN2O_2(num_soilc,nlevdecomp))
+allocate(tN2_1(num_soilc,nlevdecomp));allocate(tN2_2(num_soilc,nlevdecomp))
+
 
     do fc = 1, num_soilc
       c = filter_soilc(fc)
@@ -1338,6 +1357,50 @@ end subroutine EMAlquimia_Coldstart
 
               enddo
 
+write(101, *) ''
+tSOC1(c,:)=0._r8; tSON1(c,:)=0._r8
+tDOC1(c,:)=0._r8; tDON1(c,:)=0._r8
+tDIC1(c,:)=0._r8; tDIN1(c,:)=0._r8
+do j=1,nlevdecomp
+   lsat = h2o_liqvol(c,j)/porosity_l2e(c,j)
+   lsat = min(max(lsat,0.01),1.0)
+   kgwater_perm3soil = porosity_l2e(c,j)*lsat*water_density_l2e(c,j)
+   do poolnum=1,ndecomp_pools
+     if(this%carbon_pool_mapping(poolnum)>0) then
+        tSOC1(c,j)=tSOC1(c,j)+total_immobile_l2e(c,j,this%carbon_pool_mapping(poolnum))*catomw*dz(c,j)
+     endif
+     if(this%nitrogen_pool_mapping(poolnum)>0) then
+        tSON1(c,j)=tSON1(c,j)+total_immobile_l2e(c,j,this%nitrogen_pool_mapping(poolnum))*natomw*dz(c,j)
+     endif
+   enddo
+
+   do k=1, this%chem_sizes%num_primary
+     tDOC1(c,j)=tDOC1(c,j)+total_mobile_l2e(c,j,k)*catomw*this%DOC_content(k)*dz(c,j)
+     tDIC1(c,j)=tDIC1(c,j)+total_mobile_l2e(c,j,k)*catomw*this%DIC_content(k)*dz(c,j)
+
+     tDON1(c,j)=tDON1(c,j)+total_mobile_l2e(c,j,k)*natomw*this%DON_content(k)*dz(c,j)
+   enddo
+
+   if(this%NO3_pool_number>0) then
+     tDIN1(c,j)=tDIN1(c,j)+total_mobile_l2e(c,j,this%NO3_pool_number)*natomw*dz(c,j)
+   endif
+   if(this%NH4_pool_number>0) then
+     tDIN1(c,j)=tDIN1(c,j)+total_mobile_l2e(c,j,this%NH4_pool_number)*natomw*dz(c,j)
+   endif
+   if(this%n2o_pool_number>0) then
+     tDIN2(c,j)=tDIN2(c,j)+total_mobile_l2e(c,j,this%n2o_pool_number)*natomw*2*dz(c,j)
+   endif
+   if(this%N2_pool_number>0) then
+     tDIN2(c,j)=tDIN2(c,j)+total_mobile_l2e(c,j,this%N2_pool_number)*natomw*2*dz(c,j)
+   endif
+
+
+   write(101,*) c,j, tSOC1(c,j), tDOC1(c,j), tDIC1(c,j), &
+                 tSON1(c,j), tDON1(c,j), tDIN1(c,j)
+
+enddo
+
+write(101,*)
 
 
               ! Problem: in elm_driver, vertical water movement and lateral (tidal) flow are calculated, then BGC, then drainage. 
@@ -1383,6 +1446,62 @@ end subroutine EMAlquimia_Coldstart
               cation_exchange_capacity_e2l(c,:,:)      = cation_exchange_capacity_l2e(c,:,:)
               aux_doubles_e2l(c,:,:)                   = aux_doubles_l2e(c,:,:)
               aux_ints_e2l(c,:,:)                      = aux_ints_l2e(c,:,:)
+
+
+write(201, *) ''
+write(201, *) 'after solving : diff - '
+tSOC2(c,:)=0._r8; tSON2(c,:)=0._r8
+tDOC2(c,:)=0._r8; tDON2(c,:)=0._r8
+tDIC2(c,:)=0._r8; tDIN2(c,:)=0._r8
+do j=1,nlevdecomp
+
+   do poolnum=1,ndecomp_pools
+     if(this%carbon_pool_mapping(poolnum)>0) then
+        tSOC2(c,j)=tSOC2(c,j)+total_immobile_e2l(c,j,this%carbon_pool_mapping(poolnum))*catomw*dz(c,j)
+     endif
+     if(this%nitrogen_pool_mapping(poolnum)>0) then
+        tSON2(c,j)=tSON2(c,j)+total_immobile_e2l(c,j,this%nitrogen_pool_mapping(poolnum))*natomw*dz(c,j)
+     endif
+   enddo
+
+   do k=1, this%chem_sizes%num_primary
+     tDOC2(c,j)=tDOC2(c,j)+total_mobile_e2l(c,j,k)*catomw*this%DOC_content(k)*dz(c,j)
+     tDIC2(c,j)=tDIC2(c,j)+total_mobile_e2l(c,j,k)*catomw*this%DIC_content(k)*dz(c,j)
+
+     tDON2(c,j)=tDON2(c,j)+total_mobile_e2l(c,j,k)*natomw*this%DON_content(k)*dz(c,j)
+   enddo
+
+   if(this%NO3_pool_number>0) then
+     tDIN2(c,j)=tDIN2(c,j)+total_mobile_e2l(c,j,this%NO3_pool_number)*natomw*dz(c,j)
+   endif
+   if(this%NH4_pool_number>0) then
+     tDIN2(c,j)=tDIN2(c,j)+total_mobile_e2l(c,j,this%NH4_pool_number)*natomw*dz(c,j)
+   endif
+   if(this%n2o_pool_number>0) then
+     tDIN2(c,j)=tDIN2(c,j)+total_mobile_e2l(c,j,this%n2o_pool_number)*natomw*2*dz(c,j)
+   endif
+   if(this%N2_pool_number>0) then
+     tDIN2(c,j)=tDIN2(c,j)+total_mobile_e2l(c,j,this%N2_pool_number)*natomw*2*dz(c,j)
+   endif
+
+   !write(201,*) c,j, tSOC2(c,j)-tSOC1(c,j), tDOC2(c,j)-tDOC1(c,j), tDIC2(c,j)-tDIC1(c,j), &
+   !              tSON2(c,j)-tSON1(c,j), tDON2(c,j)-tDON1(c,j), tDIN2(c,j)-tDIN1(c,j)
+
+   write(201,*) 'column-cumsummed diff '
+   write(201,*) c, j, sum(tSOC2(c,1:j)-tSOC1(c,1:j)), sum(tDOC2(c,1:j)-tDOC1(c,1:j)), sum(tDIC2(c,1:j)-tDIC1(c,1:j)), &
+                sum(tSON2(c,1:j)-tSON1(c,1:j)), sum(tDON2(c,1:j)-tDON1(c,1:j)), sum(tDIN2(c,1:j)-tDIN1(c,1:j))
+
+enddo
+write(201,*)
+
+deallocate(tSOC1); deallocate(tSOC2)
+deallocate(tDOC1); deallocate(tDOC2)
+deallocate(tDIC1); deallocate(tDIC2)
+
+deallocate(tSON1); deallocate(tSON2)
+deallocate(tDON1); deallocate(tDON2)
+deallocate(tDIN1); deallocate(tDIN2)
+
 
               if(this%CO2_pool_number>0) then
                 hr_e2l(c) = -surf_flux(this%CO2_pool_number)*catomw/dt ! Is this an issue if there is surface water?
@@ -1430,6 +1549,8 @@ end subroutine EMAlquimia_Coldstart
                 DICrunoff_e2l(c) = DICrunoff_e2l(c) - (surf_flux(k)+lat_flux(k))*this%DIC_content(k)*catomw/dt
               enddo
 
+
+
           ! Loop through layers after solve and update ELM values
           do j=1,nlevdecomp
 
@@ -1473,7 +1594,7 @@ end subroutine EMAlquimia_Coldstart
               do k=1, this%chem_sizes%num_primary
                 DOC_e2l(c,j) = DOC_e2l(c,j) + total_mobile_e2l(c,j,k)*catomw*this%DOC_content(k)
                 DON_e2l(c,j) = DON_e2l(c,j) + total_mobile_e2l(c,j,k)*natomw*this%DON_content(k)
-                DIC_e2l(c,j) = DIC_e2l(c,j) + total_mobile_e2l(c,j,k)*catomw*this%DIC_content(k) 
+                DIC_e2l(c,j) = DIC_e2l(c,j) + total_mobile_e2l(c,j,k)*catomw*this%DIC_content(k)
               enddo
 
               if(this%acetate_pool_number>0) then
@@ -1609,6 +1730,7 @@ end subroutine EMAlquimia_Coldstart
                 excess_NH4_uptake = plantNH4uptake_e2l(c,j)*(1-plantNdemand_l2e(c,j)/(plantNO3uptake_e2l(c,j)+plantNH4uptake_e2l(c,j)))
                 NO3_e2l(c,j) = NO3_e2l(c,j) + excess_NO3_uptake*dt
                 NH4_e2l(c,j) = NH4_e2l(c,j) + excess_NH4_uptake*dt
+
                 ! write(iulog,*),'Excess NO3 uptake = ',excess_NO3_uptake,'Excess NH4 uptake = ',excess_NH4_uptake
                 plantNO3uptake_e2l(c,j) = plantNO3uptake_e2l(c,j) - excess_NO3_uptake
                 plantNH4uptake_e2l(c,j) = plantNH4uptake_e2l(c,j) - excess_NH4_uptake
@@ -1785,8 +1907,10 @@ end subroutine EMAlquimia_Coldstart
     call c_f_pointer(this%chem_state%total_mobile%data, alquimia_data, (/this%chem_sizes%num_primary/))
     ! total_mobile is converted to mol/m3 units for ELM side
     total_mobile(j,1:this%chem_sizes%num_primary)   = alquimia_data(1:this%chem_sizes%num_primary)*molperL_to_molperm3
+
     call c_f_pointer(this%chem_state%total_immobile%data, alquimia_data, (/this%chem_sizes%num_primary/))
     total_immobile(j,1:this%chem_sizes%num_primary)   = alquimia_data(1:this%chem_sizes%num_primary)
+
     call c_f_pointer(this%chem_aux_output%primary_free_ion_concentration%data, alquimia_data, (/this%chem_sizes%num_primary/))
     ! free_mobile coming out of alquimia is in molal units (mol/kg H2O). Convert to mol/m3 to match totals. mol/kg H2O * kg H2O/m3 * saturation
     free_mobile(j,1:this%chem_sizes%num_primary)   = alquimia_data(1:this%chem_sizes%num_primary)*water_density(j)*this%chem_properties%saturation
@@ -2167,6 +2291,7 @@ end subroutine EMAlquimia_Coldstart
     call c_f_pointer(this%chem_metadata%primary_names%data, name_list, (/this%chem_sizes%num_primary/))
     do ii=1, this%chem_sizes%num_primary
       call c_f_string_ptr(name_list(ii),alq_poolname)
+
       if((trim(alq_poolname) == 'CO2(aq)') .or. &
          (trim(alq_poolname) == 'HCO3-') .or. &
          (trim(alq_poolname) == 'CH4(aq)') ) then ! Take methane out of this calculation so it's more standard DIC
@@ -2443,9 +2568,9 @@ end subroutine EMAlquimia_Coldstart
   enddo
 
   ! First half of vertical transport
-  call run_vert_transport(this,actual_dt/2, total_mobile, free_mobile, &
-                          porosity(:),temperature(:),volume(:),saturation(:),liq_frac(:),&
-                          adv_flux(:),lat_flow(:),lat_bc,lat_flux_step,surf_bc,surf_flux_step,transport_change_rate)
+  !call run_vert_transport(this,actual_dt/2, total_mobile, free_mobile, &
+  !                        porosity(:),temperature(:),volume(:),saturation(:),liq_frac(:),&
+  !                        adv_flux(:),lat_flow(:),lat_bc,lat_flux_step,surf_bc,surf_flux_step,transport_change_rate)
   if(any(total_mobile(1:nlevdecomp,this%NO3_pool_number)<0.0)) then
     write(iulog,*),'NO3 Before (1st half step): ',total_mobile(1:nlevdecomp,this%NO3_pool_number)- transport_change_rate(1:nlevdecomp,this%NO3_pool_number)*actual_dt
     write(iulog,*),'NO3 after: ',total_mobile(1:nlevdecomp,this%NO3_pool_number)
@@ -2471,6 +2596,11 @@ end subroutine EMAlquimia_Coldstart
           cation_exchange_capacity,&
           aux_doubles,&
           aux_ints) 
+
+write(101, *) 'copied_ELM_to_Alquimia prior to StepOS: ', this%natural_id, j, &
+  total_mobile(j,this%NH4_pool_number), &
+  total_immobile(j,this%NH4_pool_number), &
+  aux_doubles(j,this%NH4_pool_number)
 
     porosity_tmp=this%chem_state%porosity
     call this%chem%ReactionStepOperatorSplit(this%chem_engine, actual_dt, this%chem_properties, this%chem_state, &
@@ -2515,6 +2645,12 @@ end subroutine EMAlquimia_Coldstart
         cation_exchange_capacity_tmp,&
         aux_doubles_tmp,&
         aux_ints_tmp) 
+
+
+write(201, *) 'copied_Alquimia_to_ELM after converged: ', j, &
+  total_mobile(j,this%NH4_pool_number), &
+  total_immobile(j,this%NH4_pool_number), &
+  aux_doubles(j,this%NH4_pool_number)
       
     else ! Solve did not converge. Cut timestep, and bail out if too short
       if(actual_dt/2 < min_dt) then
@@ -2549,7 +2685,8 @@ end subroutine EMAlquimia_Coldstart
                                           surface_site_density,&
                                           cation_exchange_capacity,&
                                           aux_doubles,&
-                                          aux_ints) 
+                                          aux_ints)
+
         call run_onestep(this,dt,num_cuts,ncuts)
         call this%copy_Alquimia_to_ELM(j,water_density_tmp,&
                                         aqueous_pressure_tmp,&
@@ -2637,9 +2774,9 @@ end subroutine EMAlquimia_Coldstart
 
     ! Second half of transport (Strang splitting)
     ! This is only done if we converged at this time step for all layers
-    call run_vert_transport(this,actual_dt/2, total_mobile, free_mobile, &
-                            porosity,temperature,volume,saturation,liq_frac,&
-                            adv_flux,lat_flow,lat_bc,lat_flux_step,surf_bc,surf_flux_step,transport_change_rate)
+    !call run_vert_transport(this,actual_dt/2, total_mobile, free_mobile, &
+    !                        porosity,temperature,volume,saturation,liq_frac,&
+    !                        adv_flux,lat_flow,lat_bc,lat_flux_step,surf_bc,surf_flux_step,transport_change_rate)
 
     if(any(total_mobile(1:nlevdecomp,this%NO3_pool_number)<0.0)) then
       write(iulog,*),'NO3 Before (2nd half step): ',total_mobile(1:nlevdecomp,this%NO3_pool_number)- transport_change_rate(1:nlevdecomp,this%NO3_pool_number)*actual_dt
