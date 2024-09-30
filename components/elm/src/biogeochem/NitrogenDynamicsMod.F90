@@ -175,6 +175,7 @@ contains
     use elm_varcon       , only : secspday, spval
     use elm_instMod      , only : alm_fates
     use pftvarcon        , only : noveg
+    use elm_varctl       , only : nfix_npp_patch
     !
     ! !ARGUMENTS:
     type(bounds_type)       , intent(in)    :: bounds
@@ -243,6 +244,7 @@ contains
                ! B. Sulman: Loop through patches. Nfix is weighted average of value for each PFT's parameters
                t = 0.0_r8
                if (col_lag_npp(c) /= spval) then
+                 if (nfix_npp_patch) then
                   ! B. Sulman: Loop through patches. Nfix is weighted average of value for each PFT's parameters
                   t = 0.0_r8
                   total_weight = 0.0_r8  ! To correct for inactive and unveg cells
@@ -261,6 +263,14 @@ contains
                        nfix_to_sminn(c) = 0._r8
                    endif
 
+                 else
+
+                  ! need to put npp in units of gC/m^2/year here first
+                  t = test_mult*(1.8_r8 * (1._r8 - exp(-0.003_r8 * col_lag_npp(c)*(secspday * dayspyr))))/(secspday * dayspyr)
+                  nfix_to_sminn(c) = max(0._r8,t)
+
+                 endif
+
                else
                    nfix_to_sminn(c) = 0._r8
                endif
@@ -269,6 +279,8 @@ contains
             ! use annual-mean values for NPP-NFIX relation
             do fc = 1,num_soilc
                c = filter_soilc(fc)
+
+             if (nfix_npp_patch) then
                ! B. Sulman: Loop through patches. Nfix is weighted average of value for each PFT's parameters
                t = 0.0_r8
                total_weight = 0.0_r8
@@ -284,6 +296,13 @@ contains
                else
                    nfix_to_sminn(c) = 0.0_r8
                endif
+
+             else
+
+               t = test_mult*(1.8_r8 * (1._r8 - exp(-0.003_r8 * cannsum_npp(c))))/(secspday * dayspyr)
+               nfix_to_sminn(c) = max(0._r8,t)
+              
+             end if 
             end do
          endif
          end if
