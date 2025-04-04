@@ -14,4 +14,6 @@ string(APPEND CXX_LIBS " -lstdc++")
 #set(ALQUIMIA_PATH "/nfs/data/ccsi/proj-shared/b0u/ELM-PFLOTRAN/alquimia/")
 set(ALQUIMIA_PATH "/nfs/data/ccsi/proj-shared/E3SM/tools/alquimia-dev/v2021/")
 set(PFLOTRAN_PATH "/nfs/data/ccsi/proj-shared/E3SM/tools/pflotran-elm-interface/v2021/")
+string(APPEND FFLAGS " -I${ALQUIMIA_PATH}/include/alquimia")
+string(APPEND SLIBS " -Wl,-rpath=${ALQUIMIA_PATH}/lib -L${ALQUIMIA_PATH}/lib -lalquimia -lpflotran_petsc_stubs")
 
